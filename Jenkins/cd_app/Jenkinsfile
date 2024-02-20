@@ -1,0 +1,48 @@
+pipeline {
+    agent any
+    triggers {
+        githubPush()
+    }
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '5'))
+    }
+    environment {
+        APP_NAME = "my-static-portfolio"
+        REPO_URL = 'https://github.com/evandjefie/cd-k8s.git'
+    }
+    parameters {
+        string(name: 'IMAGE_TAG', description: '')
+    }
+    stages {
+        stage("Checkout from SCM") {
+            steps {
+                cleanWs()
+                withCredentials([gitUsernamePassword(credentialsId: 'evandjefie-github', gitToolName: 'Default')]) {
+                    sh "git clone $REPO_URL app"
+                }
+            }
+        }
+        stage("Update the Deployment Tags") {
+            steps {
+                sh """
+                    cat deploy.yaml
+                    sed -i 's/${APP_NAME}:.*/${APP_NAME}:${params.IMAGE_TAG}/g' deploy.yaml                    
+                    cat deploy.yaml
+                """
+            }
+        }
+        stage("Push the changed deployment file to GitHub") {
+            steps {
+                sh """
+                    git config --global user.name "evandjefie"
+                    git config --global user.email "evandjefie10@gmail.com"
+                    git add deploy.yaml
+                    git commit -m "Updated Deployment Manifest"
+                """
+                withCredentials([gitUsernamePassword(credentialsId: 'evandjefie-github', gitToolName: 'Default')]) {
+                    sh "git push ${REPO_URL} main"
+                }
+            }
+        }
+    }
+}

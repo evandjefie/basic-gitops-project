@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-static-portfolio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-static-portfolio
+  template:
+    metadata:
+      labels:
+        app: my-static-portfolio
+    spec:
+      containers:
+        - name: my-static-portfolio
+          image: evandjefie/my-static-portfolio:1.0.1
+          resources:
+            limits:
+              cpu: "1"
+            requests:
+              cpu: "500m"
+          ports:
+            - containerPort: 30000

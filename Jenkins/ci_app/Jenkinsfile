@@ -1,0 +1,58 @@
+pipeline {
+  agent any
+  triggers {
+    githubPush()
+  }
+  options {
+    buildDiscarder(logRotator(numToKeepStr: '5'))
+  }
+  environment {
+    DOCKERHUB_CREDENTIALS = credentials('evandjefie-dockerhub')
+    DOCKERHUB_CREDENTIALS_USR = 'evandjefie'
+    APP_NAME = 'my-static-portfolio'
+    RELEASE = "1.0.0"
+    DOCKER_USER = "evandjefie"
+    IMAGE_NAME = "${DOCKER_USER}" + "/" + "${APP_NAME}"
+    IMAGE_TAG = "${RELEASE}-${BUILD_NUMBER}"
+    REPO_URL = 'https://github.com/evandjefie/my-static-portfolio.git'
+  }
+
+  stages {
+    stage('Clone App') {
+      steps {
+        cleanWs()
+        sh 'git clone $REPO_URL app'
+      }
+    }    
+    stage('Build and Tag') {
+      steps {
+        sh 'cd app && docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .'
+      }
+    }
+    stage('Login') {
+      steps {
+        sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
+      }
+    }
+    stage('Push') {
+      steps {
+        sh 'docker push ${IMAGE_NAME}:${IMAGE_TAG}'
+      }
+    }
+    stage('Trigger cd-app pipeline') {
+      steps {
+          script {
+            build job: 'cd-app', parameters: [string(name: 'IMAGE_TAG', value: "${IMAGE_TAG}")]
+          }
+      }
+    }
+  }
+  post {
+    always {        
+      sh 'docker logout'
+    }
+    failure {
+        deleteDir()
+    }
+  }
+}

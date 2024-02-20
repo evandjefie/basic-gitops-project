@@ -1,0 +1,60 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby 
+
+Vagrant.configure(2) do |config|
+
+  etcHosts = ""
+  common = <<-SHELL
+  sudo apt update && sudo apt upgrade -y
+  sudo apt install -y docker.io net-tools git wget curl zip unzip
+  sudo usermod -aG docker $USER
+  newgrp docker
+  sudo chmod 777 /var/run/docker.sock
+  echo 'Docker installed!'
+  SHELL
+  
+  config.vm.box = "bento/ubuntu-22.04"
+  config.vm.box_url = "bento/ubuntu-22.04"
+
+
+	# set servers list and their parameters
+	NODES = [
+  	 { :hostname => "vmjks", :ip => "192.168.20.67", :cpus => 2, :mem => 2048},
+  	 { :hostname => "vmk8s", :ip => "192.168.20.68", :cpus => 2, :mem => 3072 }
+	]
+
+	# define /etc/hosts for all servers
+  NODES.each do |node|
+			etcHosts += "echo '" + node[:ip] + "   " + node[:hostname] + "'>> /etc/hosts" + "\n"
+  end
+
+	# run installation
+  NODES.each do |node|
+    # Uncomment if you want to mount your local directory on vm
+    # config.vm.synced_folder ".", "/home/vagrant/hosts", type: "virtualbox", mount_options: ["dmode=700,fmode=664"]
+
+    config.vm.define node[:hostname] do |cfg|
+			cfg.vm.hostname = node[:hostname]
+      # cfg.vm.network "public_network", bridge: ""
+      cfg.vm.network "private_network", ip: node[:ip]
+      cfg.vm.provider "virtualbox" do |v|
+				v.customize [ "modifyvm", :id, "--cpus", node[:cpus] ]
+        v.customize [ "modifyvm", :id, "--memory", node[:mem] ]
+        v.customize [ "modifyvm", :id, "--natdnshostresolver1", "on" ]
+        v.customize [ "modifyvm", :id, "--natdnsproxy1", "on" ]
+        v.customize [ "modifyvm", :id, "--name", node[:hostname] ]
+				v.customize [ "modifyvm", :id, "--ioapic", "on" ]
+        v.customize [ "modifyvm", :id, "--nictype1", "virtio" ]
+      end			
+      cfg.vm.provision :shell, :inline => etcHosts
+			cfg.vm.provision :shell, :inline => common
+
+      if node[:hostname] == "vmjks"
+        cfg.vm.provision :shell, :path => "vm_install/vmjks.sh"
+      elsif node[:hostname] == "vmk8s"
+        cfg.vm.provision :shell, :path => "vm_install/vmk8s.sh"
+      end
+
+    end
+  end
+end
